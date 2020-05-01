@@ -1,22 +1,21 @@
 package eth
 
 import (
+	"bytes"
 	"crypto/ecdsa"
 	"fmt"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"io/ioutil"
 	"math/big"
-	"os"
 )
 
 // Signer 签名者
 type Signer interface {
 	SignTx(tx *types.Transaction, chainID *big.Int) (*types.Transaction, error)
 	CheckOwner(address string) error
-	Clear() error
 }
 
 // PKSigner 密钥签名
@@ -57,11 +56,6 @@ func (signer *PKSigner) CheckOwner(address string) error {
 	return nil
 }
 
-// Clear 空实现
-func (signer *PKSigner) Clear() error {
-	return nil
-}
-
 // KeyStoreSigner keystore签名者
 type KeyStoreSigner struct {
 	account accounts.Account
@@ -69,18 +63,9 @@ type KeyStoreSigner struct {
 }
 
 // NewKeyStoreSigner 创建keystone签名者
-func NewKeyStoreSigner(tmpDir, fp string, password string) (*KeyStoreSigner, error) {
-	if tmpDir == "" {
-		tmpDir = os.TempDir()
-	}
-
-	ks := keystore.NewKeyStore(tmpDir, keystore.StandardScryptN, keystore.StandardScryptP)
-	jsonBytes, err := ioutil.ReadFile(fp)
-	if err != nil {
-		return nil, err
-	}
-
-	account, err := ks.Import(jsonBytes, password, password)
+func NewKeyStoreSigner(keydir string, address, password string) (*KeyStoreSigner, error) {
+	ks := keystore.NewKeyStore(keydir, keystore.StandardScryptN, keystore.StandardScryptP)
+	account, err := ks.Find(accounts.Account{Address: common.HexToAddress(address)})
 	if err != nil {
 		return nil, err
 	}
@@ -103,16 +88,10 @@ func (signer *KeyStoreSigner) SignTx(tx *types.Transaction, chainID *big.Int) (*
 
 // CheckOwner 检测拥有者
 func (signer *KeyStoreSigner) CheckOwner(address string) error {
-	if signer.account.Address.Hex() != address {
+	if bytes.Compare(signer.account.Address.Bytes(), common.FromHex(address)) != 0 {
 		return fmt.Errorf("address is not matched keystore")
 	}
 	return nil
-}
-
-// Clear 删除新打开的文件
-func (signer *KeyStoreSigner) Clear() error {
-	signer.ks.Lock(signer.account.Address)
-	return os.Remove(signer.account.URL.Path)
 }
 
 // TransferTx 交易
