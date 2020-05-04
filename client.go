@@ -185,12 +185,12 @@ func (c *Client) SyncBlock(num uint64) error {
 }
 
 // TransferETH 转账ETH
-func (c *Client) TransferETH(from, to string, gasLimit uint64, value *big.Int, signer Signer) (string, error) {
+func (c *Client) TransferETH(from, to string, gasLimit uint64, value *big.Int, signer Signer) (string, uint64, error) {
 	return c.completeAndSendTx(from, to, gasLimit, value, nil, signer)
 }
 
 // TransferToken 转账token
-func (c *Client) TransferToken(token, from, to string, gasLimit uint64, value *big.Int, signer Signer) (txid string, err error) {
+func (c *Client) TransferToken(token, from, to string, gasLimit uint64, value *big.Int, signer Signer) (txid string, nonce uint64, err error) {
 	methodID := HashMethod("transfer(address,uint256)")
 	paddedAddress := common.LeftPadBytes(common.HexToAddress(to).Bytes(), 32)
 	paddedAmount := common.LeftPadBytes(value.Bytes(), 32)
@@ -203,29 +203,29 @@ func (c *Client) TransferToken(token, from, to string, gasLimit uint64, value *b
 	return c.completeAndSendTx(from, token, gasLimit, big.NewInt(0), data, signer)
 }
 
-func (c *Client) completeAndSendTx(from, to string, gasLimit uint64, value *big.Int, data []byte, signer Signer) (string, error) {
+func (c *Client) completeAndSendTx(from, to string, gasLimit uint64, value *big.Int, data []byte, signer Signer) (string, uint64, error) {
 	err := signer.CheckOwner(from)
 	if err != nil {
-		return "", err
+		return "", 0, err
 	}
 	nonce, err := c.nonceManager.GetNonceAt(from)
 	if err != nil {
-		return "", err
+		return "", 0, err
 	}
 
 	tx := types.NewTransaction(nonce, common.HexToAddress(to), value, gasLimit, c.gasPrice, data)
 
 	signedTx, err := signer.SignTx(tx, c.chainID)
 	if err != nil {
-		return "", err
+		return "", 0, err
 	}
 
 	err = c.ethClient.SendTransaction(context.Background(), signedTx)
 	if err != nil {
-		return "", err
+		return "", 0, err
 	}
 
-	return signedTx.Hash().Hex(), nil
+	return signedTx.Hash().Hex(), nonce, nil
 }
 
 // BalanceETH 查询指定地址的ETH数量，单位wei
