@@ -1,4 +1,4 @@
-module eth
+module github.com/hzxiao/eth
 
 go 1.13
 
